@@ -64,8 +64,8 @@ const logOutUser = (req: Request, res: Response) => {
     res.clearCookie("attendencetoken", {
         httpOnly: true,
         secure:true,
-        sameSite: 'strict',
-        // sameSite: 'none',
+        // sameSite: 'strict',
+        sameSite: 'none',
         path: '/'
     })
     return res.status(200).json({ message: "User Log Out Successsfully!!", success: true })
