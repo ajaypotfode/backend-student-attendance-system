@@ -55,7 +55,7 @@ const generateQrCode = async (req: Request, res: Response): Promise<Response> =>
 
 
 const verifyQr = async (req: Request, res: Response): Promise<Response | void> => {
-    const { qrdata } = req.body
+    const { qrdata, classId } = req.body
     // const studentId = req.user?.userId
     const QR_SECRETE = process.env.QR_SECRETE || ""
     const currentdate = format(new Date(), "yyyy-MM-dd")
@@ -63,7 +63,11 @@ const verifyQr = async (req: Request, res: Response): Promise<Response | void> =
     try {
         //   console.log("is qr :", qrdata);
         const decode = jwt.verify(qrdata, QR_SECRETE) as { classId: Types.ObjectId, studentId: Types.ObjectId }
-        // console.log("is qr :", decode);
+
+        if (decode.classId.toString() !== classId) {
+            return res.json({ message: "Student Not Having This Class!", success: false })
+        }
+
         const qrScan = await SummaryModel.findOne(
             {
                 classId: decode.classId,
