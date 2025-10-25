@@ -7,11 +7,25 @@ import ClassModel from "../models/classModel"
 import RegistrationModel from "../models/registrationModel"
 // import { User } from "../types/userTypes"
 
-const createUser = async (req: Request, res: Response): Promise<Response> => {
-    const { userName, role, email, image, password, contactNo } = req.body
+const verifyAdminToken = (req: Request, res: Response) => {
+    const { adminToken } = req.body
+    const ENV_TOKEN = process.env.ADMIN_TOKEN
+    if (adminToken === ENV_TOKEN) {
+        return res.status(200).json({ message: "Admin Authorized", success: true, token: ENV_TOKEN })
+    }
+    return res.status(403).json({ message: "Access Denied, Unauthorized To Registeration", success: false })
+}
 
+
+
+const createUser = async (req: Request, res: Response): Promise<Response> => {
+    const { userName, role, email, image, password, contactNo, adminToken } = req.body
+    const ENV_TOKEN = process.env.ADMIN_TOKEN
     try {
         // const userRole = req.user.role
+        if (role === 'admin' && adminToken !== ENV_TOKEN) {
+            return res.status(403).json({ message: "Access Denied, Unauthorized To Register As Admin", success: false })
+        }
 
         const isUser = await UserModel.findOne({
             $or: [
@@ -265,6 +279,7 @@ const manageUserStatus = async (req: Request, res: Response): Promise<Response> 
 
 
 export {
+    verifyAdminToken,
     createUser,
     getAllTrainer,
     getuser,
