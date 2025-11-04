@@ -68,7 +68,7 @@ const verifyQr = async (req: Request, res: Response): Promise<Response | void> =
             return res.json({ message: "Student Not Having This Class!", success: false })
         }
 
-        const qrScan = await SummaryModel.findOne(
+        const qrScanned = await SummaryModel.findOne(
             {
                 classId: decode.classId,
                 studentId: decode.studentId,
@@ -77,7 +77,7 @@ const verifyQr = async (req: Request, res: Response): Promise<Response | void> =
 
         )
 
-        if (qrScan) {
+        if (qrScanned) {
             return res.json({ message: "Student Already Scanned Qr!", success: false })
         }
 

@@ -2,10 +2,12 @@ import { Request, Response } from 'express'
 import StudentClassModel from '../models/studentClassModel'
 // import connectDatabse from '../utils/db'
 import SummaryModel from '../models/AttendenceSummaryModel'
-import { Session } from 'inspector/promises'
 import { Types } from 'mongoose'
 import UserModel from '../models/userModel'
 import ClassModel from '../models/classModel'
+import { format } from 'date-fns'
+import { AttendenceSummary } from '../types/summaryTypes'
+import ClassAttendenceModel from '../models/ClassAttendenceModel'
 // import { time } from 'console'
 // import StudentModel from '../models/studentClassModel'
 
@@ -49,7 +51,8 @@ const addStudentClass = async (req: Request, res: Response): Promise<Response> =
 
             const studentData = await UserModel.find(
                 { _id: { $in: newStudent }, role: 'student' }
-            ).select('_id userName email contactNo role status').lean()  //lean() is use to get Only Plain Object
+            ).select('_id userName email contactNo role status')
+            // .lean() is use to get Only Plain Object
 
             // it is not necessary to send to browser but if it is required then w'll use it in future 
             classAssignedStudents = studentData
@@ -64,10 +67,8 @@ const addStudentClass = async (req: Request, res: Response): Promise<Response> =
 }
 
 
-
-
 // this is use to get Student Who do not have The Specific Class
-const getAvailableStudents = async (req: Request, res: Response): Promise<Response> => {
+const getAllClassStudents = async (req: Request, res: Response): Promise<Response> => {
     // const { classId, search} = req.query as { classId: string, search: string }
     const classId = req.query.classId as String
     const search = req.query.search as string || ""
@@ -80,9 +81,67 @@ const getAvailableStudents = async (req: Request, res: Response): Promise<Respon
         }
 
         // Find all student IDs already in this class
+        const assignedId = await StudentClassModel.find(
+            { classId })
+            .distinct('studentId')
+        // distinct() Retrieves only unique studentId values from the collection (without including _id or full documents)
+
+        // Find all active students NOT in the assigned list
+        const students = await UserModel.find({
+            _id: { $in: assignedId },
+            $or: [
+                { userName: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } }
+            ],
+            status: 'active',
+            role: 'student'
+        })
+            .skip((pageNum - 1) * limit)
+            .limit(limit)
+            .sort({ createdAt: 1, _id: 1 })
+            .select('_id userName email contactNo status role')
+
+        if (!students) {
+            return res.status(200).json({ message: "No One Attending This Class!!", success: false })
+        }
+
+        const totalStudents = await UserModel.countDocuments({ _id: { $in: assignedId }, status: 'active', role: 'student' })
+
+
+        const pages = {
+            totalPages: Math.ceil(totalStudents / limit),
+            pageNum: Math.ceil(totalStudents / limit) === 0 ? 0 : pageNum
+        }
+
+
+        return res.status(200).json({ message: "Available Students Fetched!!", success: true, result: students, pages })
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Something went wrong"
+        return res.status(500).json({ message: "failed To fetch Clasees!!", success: false, error: errorMessage })
+    }
+}
+
+
+
+
+// this is use to get Student Who do not have The Specific Class
+const getUnAssignedClassStudents = async (req: Request, res: Response): Promise<Response> => {
+    // const { classId, search} = req.query as { classId: string, search: string }
+    const classId = req.query.classId as String
+    const search = req.query.search as string || ""
+    const pageNum = parseInt(req.query.pageNum as string) || 1
+    const limit = 15;
+    try {
+
+        if (!classId) {
+            return res.status(404).json({ message: "Please Mention ClassId First!!", success: false })
+        }
+
+
+        // Find all student IDs already in this class
         const assignedId = await StudentClassModel.find({ classId }).distinct('studentId')
         //distinct() Retrieves only unique studentId values from the collection (without including _id or full documents)
-
 
         // Find all active students NOT in the assigned list
         const students = await UserModel.find({
@@ -100,14 +159,11 @@ const getAvailableStudents = async (req: Request, res: Response): Promise<Respon
             .select('_id userName email contactNo status role')
 
         if (!students) {
-            return res.status(200).json({ message: "All Student Attending This Class!!", success: true, result: students })
+            return res.status(200).json({ message: "All Student Attending This Class!!", success: false })
         }
 
-        // const summary = await StudentClassModel.find({ classId: { $ne: classId } })
-        //     .populate("studentId", "userName contactNo status email")
-        //     .select('-totalClass -attendence -absence')
-
         const totalStudents = await UserModel.countDocuments({ _id: { $nin: assignedId }, status: 'active', role: 'student' })
+
 
         const pages = {
             totalPages: Math.ceil(totalStudents / limit),
@@ -115,15 +171,13 @@ const getAvailableStudents = async (req: Request, res: Response): Promise<Respon
         }
 
 
-        return res.status(200).json({ message: "summary Fetched Successfully!!", success: true, result: students, pages })
+        return res.status(200).json({ message: "Available Students Fetched!!", success: true, result: students, pages })
 
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Something went wrong"
         return res.status(500).json({ message: "failed To fetch Clasees!!", success: false, error: errorMessage })
     }
 }
-
-
 
 
 
@@ -276,6 +330,54 @@ const getStudentAttendence = async (req: Request, res: Response): Promise<Respon
 }
 
 
+
+const markStudentAttendence = async (req: Request, res: Response): Promise<Response> => {
+    const { classId, studentIds } = req.body as { classId: string, studentIds: string[] }
+    const currentdate = format(new Date(), "yyyy-MM-dd")
+    try {
+        const markeStdAttendence = studentIds.map((studentId) => (
+            {
+                updateOne: {
+                    filter: {
+                        studentId: new Types.ObjectId(studentId),
+                        classId: new Types.ObjectId(classId)
+
+                    },
+                    update: { $set: { 'summary.$[summ].present': true } },
+                    arrayFilters: [
+                        { 'summ.date': currentdate, 'summ.present': false }
+                    ]
+                }
+            }
+        ))
+        const markedAttendence = await SummaryModel.bulkWrite(markeStdAttendence)
+        // it is use to update the doc which is having the array 
+
+
+        const studentsdata = await StudentClassModel.updateMany(
+            { studentId: { $in: studentIds }, classId: classId },
+            { $inc: { attendence: 1, absence: -1 } },
+            { new: true }
+        ).populate('studentId', '_id userName email contactNo status role')
+
+
+        const todaysAttendence = await ClassAttendenceModel.findOneAndUpdate(
+            { classId: classId, date: currentdate },
+            { $inc: { attendence: 1, absent: -1 } },
+            { new: true }
+        ).select('date absent attendence totalStudents')
+
+        return res.status(200).json({ message: "successfully marked Attendence !!", success: true, markedAttendence, studentsdata })
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Somethimg Went Wrong"
+        return res.json({ message: "failed To Updated Attendence", success: false, error: errorMessage })
+    }
+}
+
+// const
+
+
 // const getSingleClassAttendence = async (req: Request, res: Response): Promise<Response> => {
 //     const studentId = req.user.userId
 //     const classId = req.params?.classId
@@ -293,4 +395,13 @@ const getStudentAttendence = async (req: Request, res: Response): Promise<Respon
 
 
 
-export { addStudentClass, getStudentClasses, getStudentsActiveClasses, getStudentsAttendenceSummary, getStudentAttendence, getAvailableStudents }
+export {
+    addStudentClass,
+    getStudentClasses,
+    getStudentsActiveClasses,
+    getStudentsAttendenceSummary,
+    getStudentAttendence,
+    getUnAssignedClassStudents,
+    getAllClassStudents,
+    markStudentAttendence
+}

@@ -1,5 +1,14 @@
 import express from 'express'
-import { addStudentClass, getStudentsAttendenceSummary, getStudentClasses, getStudentAttendence, getAvailableStudents, getStudentsActiveClasses } from '../controllers/studentClassControllers'
+import {
+    addStudentClass,
+    getStudentsAttendenceSummary,
+    getStudentClasses,
+    getStudentAttendence,
+    getUnAssignedClassStudents,
+    getStudentsActiveClasses,
+    getAllClassStudents,
+    markStudentAttendence
+} from '../controllers/studentClassControllers'
 import adminMiddlware from '../middleware/adminMiddlware';
 const router = express.Router()
 
@@ -11,7 +20,9 @@ router.get('/class-Attendence', getStudentAttendence)
 
 router.get('/attendence-summary', getStudentsAttendenceSummary)
 router.use(adminMiddlware)
-router.get('/available-students', getAvailableStudents)
+router.get('/class-students', getAllClassStudents)
+router.post('/mark-attendence', markStudentAttendence)
+router.get('/available-students', getUnAssignedClassStudents)
 router.post('/add-class', addStudentClass);
 
 export default router
