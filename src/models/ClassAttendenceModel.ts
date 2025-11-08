@@ -26,6 +26,11 @@ const ClassAttendenceSchema: Schema<ClassAttendence> = new Schema({
         type: Number,
         required: [true, "Absent Student Data Is Required"],
         default: 0
+    },
+    isOpen: {
+        type: Boolean,
+        required: [true, "isOpen Is Required"],
+        default: false
     }
 
 }, { timestamps: true })

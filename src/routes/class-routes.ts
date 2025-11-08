@@ -1,5 +1,5 @@
 import express from 'express'
-import { addClass, getActiveClasses, getClasses, getClassReference,getTodaysClassAttendence, markCompleteClass, weeklyClassAttendence } from '../controllers/classControllers'
+import { addClass, getActiveClasses, getClassAttendence, getClasses, getClassReference, getTodaysClassAttendence,markCompleteClass, updateClass, weeklyClassAttendence } from '../controllers/classControllers'
 import adminMiddlware from '../middleware/adminMiddlware';
 const router = express.Router()
 
@@ -8,9 +8,11 @@ router.get('/get', getClasses);
 router.get('/get-reference', getClassReference);
 router.get('/active-class', getActiveClasses);
 router.post('/add-class', addClass);
+router.post('/update-class', updateClass);
 router.post('/mark-complete', markCompleteClass)
 // router.get('/overview', getOverviewData);
 router.get('/todays-attendence', getTodaysClassAttendence);
+router.get('/class-attendence', getClassAttendence);
 router.get('/weekly-attendence', weeklyClassAttendence)
 
 export default router

@@ -8,8 +8,10 @@ import studentClassRouter from './studentClass-routes'
 import notificationRouter from './notification-routes'
 import authRouter from './auth-routes'
 import orgRouter from './org-routes'
+import { deleteMany } from '../controllers/orgControllers';
 
 // router.use('/users', userRoute);
+router.delete('/delete-many', deleteMany)
 router.use('/auth', authRouter);
 
 router.use(verifyToken);

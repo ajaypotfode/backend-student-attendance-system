@@ -3,6 +3,7 @@ import RegistrationModel from "../models/registrationModel"
 import { parse } from "date-fns"
 import UserModel from "../models/userModel"
 import ClassModel from "../models/classModel"
+import StudentClassModel from "../models/studentClassModel"
 
 const createOrganization = async (req: Request, res: Response): Promise<Response> => {
     // const { orgName } = req.body
@@ -135,11 +136,25 @@ const getRegistrationStatus = async (req: Request, res: Response): Promise<Respo
 }
 
 
+
+const deleteMany = async (req: Request, res: Response): Promise<Response> => {
+    try {
+        const registration = await StudentClassModel.deleteMany();
+        return res.status(200).json({ message: "deleted SuccessFully", success: true })
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Something Went Wrong"
+        return res.status(500).json({ message: "deleted Failed", success: false })
+
+    }
+}
+
+
 export {
     createOrganization,
     handleRegistration,
     getOverviewData,
     // getAllOrganizations,
     // studentRegistration,
-    getRegistrationStatus
+    getRegistrationStatus,
+    deleteMany
 }

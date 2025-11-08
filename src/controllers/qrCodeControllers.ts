@@ -72,7 +72,7 @@ const verifyQr = async (req: Request, res: Response): Promise<Response | void> =
             {
                 classId: decode.classId,
                 studentId: decode.studentId,
-                summary: { $elemMatch: { date: currentdate, present: 'true' } } //$elemMatch Is Used To Match Element from Array
+                summary: { $elemMatch: { date: currentdate, present: true } } //$elemMatch Is Used To Match Element from Array
             },
 
         )
@@ -122,8 +122,6 @@ const verifyQr = async (req: Request, res: Response): Promise<Response | void> =
 }
 
 
-
-
 const classStudentAttendence = async (req: Request, res: Response): Promise<Response | void> => {
     const { classId } = req.body
     // const userRole = req.user.role
@@ -147,10 +145,11 @@ const classStudentAttendence = async (req: Request, res: Response): Promise<Resp
             present: false,
         }
 
+        let isExistingSummary
         await Promise.all(
             allStudents.map(async (entity) => {
 
-                const isExistingSummary = await SummaryModel.findOne({
+                isExistingSummary = await SummaryModel.findOne({
                     classId,
                     studentId: entity.studentId,
                     summary: { $elemMatch: { date: formatdate, } }
@@ -174,6 +173,10 @@ const classStudentAttendence = async (req: Request, res: Response): Promise<Resp
             })
         )
 
+        if (isExistingSummary) {
+            return res.json({ message: "Already Updated initial Students Summary", success: false })
+        }
+
         const isAttendence = await ClassAttendenceModel.findOne({ date: formatdate, classId })
 
         if (!isAttendence) {
@@ -182,16 +185,11 @@ const classStudentAttendence = async (req: Request, res: Response): Promise<Resp
                 classId,
                 totalStudents: allStudents.length,
                 date: formatdate,
-                absent: allStudents.length
+                absent: allStudents.length,
+                isOpen: true
             })
 
             await attendenceData.save()
-
-            // await ClassAttendenceModel.findOneAndUpdate(
-            //     { classId: classId },
-            //     { totalStudents: allStudents.length, date: formatdate, absent: allStudents.length },
-            //     { upsert: true, new: true }
-            // )
         }
 
         return res.json({ message: "student Attendence Updated", success: true })
@@ -203,4 +201,27 @@ const classStudentAttendence = async (req: Request, res: Response): Promise<Resp
 }
 
 
-export { generateQrCode, verifyQr, classStudentAttendence }
+
+const closeClass = async (req: Request, res: Response): Promise<Response | void> => {
+    const { classId } = req.body
+    const formatdate = format(new Date(), "yyyy-MM-dd")
+    try {
+
+        const classAttendence = await ClassAttendenceModel.findOne(
+            { classId },
+            { isOpen: false }
+
+        ).populate('classId', 'className time')
+
+        return res.json({ message: "Class Closed", success: true, result: classAttendence })
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Somethimg Went Wrong"
+        return res.json({ message: "failed To Close Class", success: false, error: errorMessage })
+    }
+}
+
+
+
+
+export { generateQrCode, verifyQr, classStudentAttendence,closeClass }

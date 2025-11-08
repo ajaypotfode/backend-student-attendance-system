@@ -6,7 +6,6 @@ import { Types } from 'mongoose'
 import UserModel from '../models/userModel'
 import ClassModel from '../models/classModel'
 import { format } from 'date-fns'
-import { AttendenceSummary } from '../types/summaryTypes'
 import ClassAttendenceModel from '../models/ClassAttendenceModel'
 // import { time } from 'console'
 // import StudentModel from '../models/studentClassModel'
@@ -84,6 +83,7 @@ const getAllClassStudents = async (req: Request, res: Response): Promise<Respons
         const assignedId = await StudentClassModel.find(
             { classId })
             .distinct('studentId')
+
         // distinct() Retrieves only unique studentId values from the collection (without including _id or full documents)
 
         // Find all active students NOT in the assigned list
@@ -114,7 +114,7 @@ const getAllClassStudents = async (req: Request, res: Response): Promise<Respons
         }
 
 
-        return res.status(200).json({ message: "Available Students Fetched!!", success: true, result: students, pages })
+        return res.status(200).json({ message: "All Class Students Fetched!!", success: true, result: students, pages })
 
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Something went wrong"
@@ -335,7 +335,17 @@ const markStudentAttendence = async (req: Request, res: Response): Promise<Respo
     const { classId, studentIds } = req.body as { classId: string, studentIds: string[] }
     const currentdate = format(new Date(), "yyyy-MM-dd")
     try {
-        const markeStdAttendence = studentIds.map((studentId) => (
+
+        const isClassClosed = await ClassAttendenceModel.findOne(
+            { classId, isOpen: false, date: currentdate }
+        )
+
+        if (isClassClosed) {
+            return res.status(200).json({ message: "class Closed for Today You Can Not add Attendence", success: false })
+        }
+
+
+        const markStdAttendence = studentIds.map((studentId) => (
             {
                 updateOne: {
                     filter: {
@@ -350,7 +360,9 @@ const markStudentAttendence = async (req: Request, res: Response): Promise<Respo
                 }
             }
         ))
-        const markedAttendence = await SummaryModel.bulkWrite(markeStdAttendence)
+
+
+        const markedAttendence = await SummaryModel.bulkWrite(markStdAttendence)
         // it is use to update the doc which is having the array 
 
 
@@ -363,11 +375,14 @@ const markStudentAttendence = async (req: Request, res: Response): Promise<Respo
 
         const todaysAttendence = await ClassAttendenceModel.findOneAndUpdate(
             { classId: classId, date: currentdate },
-            { $inc: { attendence: 1, absent: -1 } },
+            {
+                $inc: { attendence: markedAttendence.modifiedCount, absent: -markedAttendence.modifiedCount },
+                isOpen: false
+            },
             { new: true }
-        ).select('date absent attendence totalStudents')
+        ).select('date absent attendence totalStudents isOpen')
 
-        return res.status(200).json({ message: "successfully marked Attendence !!", success: true, markedAttendence, studentsdata })
+        return res.status(200).json({ message: "successfully marked Attendence !!", success: true, markedAttendence, studentsdata, todaysAttendence })
 
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Somethimg Went Wrong"

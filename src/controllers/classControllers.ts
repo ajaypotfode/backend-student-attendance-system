@@ -1,17 +1,17 @@
 import { Response, Request } from "express"
 import ClassModel from "../models/classModel";
-import UserModel from "../models/userModel";
 import ClassAttendenceModel from "../models/ClassAttendenceModel";
-import { format } from 'date-fns'
+import { format, subDays } from 'date-fns'
+import SummaryModel from "../models/AttendenceSummaryModel";
 
 const addClass = async (req: Request, res: Response): Promise<Response> => {
     try {
         const { className, trainer, time } = req.body;
 
-        const isClass = await ClassModel.findOne({ className, trainer, time })
+        const isClass = await ClassModel.findOne({ trainer, time })
 
         if (isClass) {
-            return res.status(200).json({ message: "Class Already Allotted to This Trainer ", success: false })
+            return res.status(200).json({ message: `Already Allotted class time ${time} to ${trainer}`, success: false })
         }
 
         const newClass = new ClassModel({
@@ -32,6 +32,34 @@ const addClass = async (req: Request, res: Response): Promise<Response> => {
         return res.status(500).json({ message: "failed To Create Class!!", success: false, error: errorMessage })
     }
 }
+
+
+const updateClass = async (req: Request, res: Response): Promise<Response> => {
+    try {
+        const { className, trainer, time, id } = req.body;
+
+        const isClass = await ClassModel.findOne({ trainer, time })
+
+        if (isClass) {
+            return res.status(200).json({ message: `Already Allotted class time ${time} to ${trainer}`, success: false })
+        }
+
+        const updatedData = await ClassModel.findByIdAndUpdate(
+            id,
+            { className, trainer, time },
+            { new: true }
+        ).populate('trainer', 'userName')
+
+
+        return res.status(200).json({ message: "Class Is Updated SuccessFully!!", success: true, result: updatedData })
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Sometimg Went Wrong"
+
+        return res.status(500).json({ message: "failed To Update Class!!", success: false, error: errorMessage })
+    }
+}
+
 
 
 
@@ -140,7 +168,7 @@ const getActiveClasses = async (req: Request, res: Response): Promise<Response> 
 
 
 
-// this is use To Get Todays Class Attendence Data
+// // this is use To Get Todays Class Attendence Data
 const getTodaysClassAttendence = async (req: Request, res: Response): Promise<Response> => {
     const classId = req.query.classId
 
@@ -156,6 +184,83 @@ const getTodaysClassAttendence = async (req: Request, res: Response): Promise<Re
         // const classAttendence = await ClassAttendenceModel.find()
 
         return res.status(200).json({ message: "Todays Attendence Summary Fetched Success!!", success: true, result: classAttendence })
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Sometimg Went Wrong"
+        return res.status(500).json({ message: "failed To Fetch Attendence Summary !!", success: false, error: errorMessage })
+    }
+}
+
+
+const getClassAttendence = async (req: Request, res: Response): Promise<Response> => {
+    const pageNum = parseInt(req.query.pageNum as string) || 1
+    const limit = 15
+    const classId = req.query.classId
+    const date = req.query.date as string
+
+    if (!classId || !date) {
+        return res.status(200).json({ message: `${!date ? "Date Missing" : "ClassId Missing"}`, success: false })
+    };
+
+    try {
+        let toggleDate
+        if (date === 'todays') {
+            toggleDate = new Date()
+        } else if (date === 'yesterday') {
+            toggleDate = subDays(new Date(), 1);
+        }
+        else {
+            toggleDate = new Date(date)
+        }
+
+        const currentDate = format(toggleDate, 'yyyy-MM-dd')
+
+        // this is use To get student summary for the mentioned date
+        const classAttendence = await SummaryModel.find(
+            {
+                classId: classId,
+                summary: { $elemMatch: { date: currentDate } }
+            }
+
+        ).populate('studentId', 'userName email')
+            // .select('-summary')
+            .skip((pageNum - 1) * limit)
+            .limit(limit)
+            .sort({ studentId: 1 })
+
+
+        // this is use To get date Specific summary
+        const dateFilteredSummary = classAttendence.map(doc => {
+            const match = doc.summary?.find(summ => summ.date === currentDate)
+
+            return {
+                _id: doc._id,
+                classId: doc.classId,
+                studentId: doc.studentId,
+                summary: match,
+                __v: doc.__v,
+            }
+        })
+
+
+        // this is use to get Total class data For the Mentioned Date
+        const totalAttendence = await ClassAttendenceModel.findOne({ date: currentDate, classId })
+
+        const totalDoc = await SummaryModel.countDocuments({
+            classId: classId,
+            summary: { $elemMatch: { date: currentDate } }
+        })
+
+        const pages = {
+            totalPages: Math.ceil(totalDoc / limit),
+            pageNum: Math.ceil(totalDoc / limit) === 0 ? 0 : pageNum
+        }
+
+        const result = {
+            attendendStudents: dateFilteredSummary,
+            totalAttendence: totalAttendence
+        }
+
+        return res.status(200).json({ message: "Todays Attendence Summary Fetched Success!!", success: true, result: result, pages })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Sometimg Went Wrong"
         return res.status(500).json({ message: "failed To Fetch Attendence Summary !!", success: false, error: errorMessage })
@@ -195,4 +300,14 @@ const weeklyClassAttendence = async (req: Request, res: Response): Promise<Respo
 }
 
 
-export { addClass, getClasses, getTodaysClassAttendence, weeklyClassAttendence, getActiveClasses, markCompleteClass, getClassReference }
+export {
+    addClass,
+    updateClass,
+    getClasses,
+    getTodaysClassAttendence,
+    weeklyClassAttendence,
+    getActiveClasses,
+    markCompleteClass,
+    getClassReference,
+    getClassAttendence
+}

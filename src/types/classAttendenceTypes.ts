@@ -5,5 +5,6 @@ export interface ClassAttendence extends Document {
     date: string,
     totalStudents: number,
     attendence: number,
-    absent: number
+    absent: number,
+    isOpen: boolean
 }
