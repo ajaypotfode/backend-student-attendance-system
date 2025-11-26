@@ -133,6 +133,12 @@ const classStudentAttendence = async (req: Request, res: Response): Promise<Resp
         //     return res.status(401).json({ message: "Admin Access Only!!", success: false })
         // }
 
+        const isClassClosed = await ClassAttendenceModel.findOne({ classId, date: formatdate, isOpen: false })
+
+        if (isClassClosed) {
+            return res.status(404).json({ success: false, message: "Class Closed For Today" });
+        }
+
         const allStudents = await StudentClassModel.find({ classId: classId })
 
         if (allStudents.length === 0) {
@@ -207,11 +213,11 @@ const closeClass = async (req: Request, res: Response): Promise<Response | void>
     const formatdate = format(new Date(), "yyyy-MM-dd")
     try {
 
-        const classAttendence = await ClassAttendenceModel.findOne(
-            { classId },
+        const classAttendence = await ClassAttendenceModel.findOneAndUpdate(
+            { classId, date: formatdate },
             { isOpen: false }
 
-        ).populate('classId', 'className time')
+        ).populate('classId', 'className time isOpen')
 
         return res.json({ message: "Class Closed", success: true, result: classAttendence })
 
@@ -224,4 +230,4 @@ const closeClass = async (req: Request, res: Response): Promise<Response | void>
 
 
 
-export { generateQrCode, verifyQr, classStudentAttendence,closeClass }
+export { generateQrCode, verifyQr, classStudentAttendence, closeClass }
