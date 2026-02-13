@@ -97,7 +97,7 @@ const verifyQr = async (req: Request, res: Response): Promise<Response | void> =
             { studentId: decode.studentId, classId: decode.classId },
             { $inc: { attendence: 1, absence: -1 } },
             { new: true }
-        ).populate('studentId', 'username email contactNo role')
+        ).populate('studentId', 'username email contactNo role image')
             .populate('classId', 'className time')
 
         if (!studentsdata) {
