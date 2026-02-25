@@ -23,12 +23,18 @@ app.use(cors({
     origin: [
         'http://localhost:3000',
         'http://localhost:3001',
+        'http://localhost:5173/',
+        'http://localhost:5174/',
         'https://students-dashboard-student-attendan.vercel.app',
         'https://admin-pannel-student-attendance-sys.vercel.app'
     ],
     credentials: true
 
 }))
+
+// app.use(cors({
+//     origin: '*'
+// }))
 
 app.use('/v1', allRoutes)
 
