@@ -14,6 +14,8 @@ export const generatingClassQuery = (trainer: string, time: string, id?: string)
         }
     }
     else {
+        // this query is used to handle mid night logic 
+        // cause if time get reduce then reducedHrs is Gt addHrs (eg:23:00 > 01:00)
         query = {
             trainer,
             status: 'active',

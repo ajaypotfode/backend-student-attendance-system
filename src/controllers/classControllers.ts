@@ -10,7 +10,7 @@ const addClass = async (req: Request, res: Response): Promise<Response> => {
         const { className, trainer, time } = req.body;
 
         if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(time)) {
-            return res.status(400).json({ message: "Invalid time format. Use HH:mm" });
+            return res.status(400).json({ message: "Invalid time format. Use HH:mm", success: false });
         }
 
         const query = generatingClassQuery(trainer, time)
@@ -47,10 +47,10 @@ const updateClass = async (req: Request, res: Response): Promise<Response> => {
         const { className, trainer, time, id } = req.body;
 
         if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(time)) {
-            return res.status(400).json({ message: "Invalid time format. Use HH:mm" });
+            return res.status(400).json({ message: "Invalid time format. Use HH:mm", success: false });
         }
 
-        const query = generatingClassQuery(trainer, time,id)
+        const query = generatingClassQuery(trainer, time, id)
         const isClass = await ClassModel.findOne(query);
 
         if (isClass) {
