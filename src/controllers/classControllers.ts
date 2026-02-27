@@ -1,17 +1,24 @@
 import { Response, Request } from "express"
 import ClassModel from "../models/classModel";
 import ClassAttendenceModel from "../models/ClassAttendenceModel";
-import { format, subDays } from 'date-fns'
+import { format, parse, subDays } from 'date-fns'
 import SummaryModel from "../models/AttendenceSummaryModel";
+import { generatingClassQuery } from "../helpers/classQuery";
 
 const addClass = async (req: Request, res: Response): Promise<Response> => {
     try {
         const { className, trainer, time } = req.body;
 
-        const isClass = await ClassModel.findOne({ trainer, time })
+        if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(time)) {
+            return res.status(400).json({ message: "Invalid time format. Use HH:mm" });
+        }
+
+        const query = generatingClassQuery(trainer, time)
+        const isClass = await ClassModel.findOne(query);
+
 
         if (isClass) {
-            return res.status(200).json({ message: `Already Allotted class time ${time} to ${trainer}`, success: false })
+            return res.status(200).json({ message: `Already Allotted this Time Slot to this Trainer`, success: false })
         }
 
         const newClass = new ClassModel({
@@ -22,9 +29,10 @@ const addClass = async (req: Request, res: Response): Promise<Response> => {
 
         await newClass.save()
 
-        const result = await newClass.populate('trainer', 'userName')
+        const result = await newClass.populate('trainer', 'userName');
+        const convertedDate = format(parse(result.time, 'HH:mm', new Date()), "h:mm a")
 
-        return res.status(200).json({ message: "Class Is Created SuccessFully!!", success: true, result: result })
+        return res.status(200).json({ message: "Class Is Created SuccessFully!!", success: true, result: { ...result.toObject(), time: convertedDate } })
 
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Sometimg Went Wrong"
@@ -38,10 +46,15 @@ const updateClass = async (req: Request, res: Response): Promise<Response> => {
     try {
         const { className, trainer, time, id } = req.body;
 
-        const isClass = await ClassModel.findOne({ trainer, time })
+        if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(time)) {
+            return res.status(400).json({ message: "Invalid time format. Use HH:mm" });
+        }
+
+        const query = generatingClassQuery(trainer, time,id)
+        const isClass = await ClassModel.findOne(query);
 
         if (isClass) {
-            return res.status(200).json({ message: `Already Allotted class time ${time} to ${trainer}`, success: false })
+            return res.status(200).json({ message: `Already Allotted this Time Slot to this Trainer`, success: false })
         }
 
         const updatedData = await ClassModel.findByIdAndUpdate(
@@ -49,9 +62,15 @@ const updateClass = async (req: Request, res: Response): Promise<Response> => {
             { className, trainer, time },
             { new: true }
         ).populate('trainer', 'userName')
+            .lean()
+
+        let convertedDate: null | string = null
+        if (updatedData) {
+            convertedDate = format(parse(updatedData?.time || '', 'HH:mm', new Date()), "h:mm a");
+        }
 
 
-        return res.status(200).json({ message: "Class Is Updated SuccessFully!!", success: true, result: updatedData })
+        return res.status(200).json({ message: "Class Is Updated SuccessFully!!", success: true, result: { ...updatedData, convertedDate } })
 
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Sometimg Went Wrong"
@@ -76,10 +95,13 @@ const getClasses = async (req: Request, res: Response): Promise<Response> => {
             .skip((pageNum - 1) * limit)
             .limit(limit)
             .sort({ createdAt: 1, _id: 1 })
+            .lean()
 
         // const pages={
 
         // }
+        const result = classes.map(cls => ({ ...cls, time: format(parse(cls.time, 'HH:mm', new Date()), 'h:mm a') }));
+
         const totalClass = await ClassModel.countDocuments();
 
         const pages = {
@@ -87,7 +109,7 @@ const getClasses = async (req: Request, res: Response): Promise<Response> => {
             pageNum: Math.ceil(totalClass / limit) === 0 ? 0 : pageNum
         }
 
-        return res.status(200).json({ message: "Classes Fetched Successfully", success: true, result: classes, pages })
+        return res.status(200).json({ message: "Classes Fetched Successfully", success: true, result: result, pages })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Sometimg Went Wrong"
         return res.status(500).json({ message: "failed To Fetch Class!!", success: false, error: errorMessage })
@@ -109,8 +131,11 @@ const getClassReference = async (req: Request, res: Response): Promise<Response>
             // .skip((pageNum - 1) * limit)
             .limit(limit)
             .sort({ createdAt: 1 })
+            .lean();
 
-        return res.status(200).json({ message: "Classes Fetched Successfully", success: true, result: classes })
+        const result = classes.map(cls => ({ ...cls, time: format(parse(cls.time, 'HH:mm', new Date()), "h:mm a") }))
+
+        return res.status(200).json({ message: "Classes Fetched Successfully", success: true, result: result })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Sometimg Went Wrong"
         return res.status(500).json({ message: "failed To Fetch Class!!", success: false, error: errorMessage })
@@ -129,11 +154,17 @@ const markCompleteClass = async (req: Request, res: Response): Promise<Response>
             { new: true }
         ).populate('trainer', 'userName')
 
+        let convertedDate: null | string = null
+        if (updateClass) {
+            convertedDate = format(parse(updateClass?.time || '', 'HH:mm', new Date()), "h:mm a");
+        }
+
+
         // if (!updateClass) {
         //     return res.status(200).json({ message: "Class Already Marked As Complete!!", success: false })
         // }
 
-        return res.status(200).json({ message: "Class Marked As Complete!!", success: true, return: updateClass })
+        return res.status(200).json({ message: "Class Marked As Complete!!", success: true, return: { ...updateClass, time: convertedDate } })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Sometimg Went Wrong"
         return res.status(500).json({ message: "failed To marked As Complete!", success: false, error: errorMessage })
@@ -155,8 +186,11 @@ const getActiveClasses = async (req: Request, res: Response): Promise<Response> 
             //     { trainer: { $regex: search, $options: 'i' } }
             // ]
         }).populate('trainer', 'userName')
+            .lean();
 
-        return res.status(200).json({ message: "Classes Fetched Successfully", success: true, result: classes })
+        const result = classes.map(cls => ({ ...cls, time: format(parse(cls.time, 'HH:mm', new Date()), "h:mm a") }))
+
+        return res.status(200).json({ message: "Classes Fetched Successfully", success: true, result: result })
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Sometimg Went Wrong"
         return res.status(500).json({ message: "failed To Fetch Class!!", success: false, error: errorMessage })
@@ -181,6 +215,7 @@ const getTodaysClassAttendence = async (req: Request, res: Response): Promise<Re
         const currentDate = format(new Date(), 'yyyy-MM-dd')
         const classAttendence = await ClassAttendenceModel.findOne({ date: currentDate, classId })
             .populate('classId', 'className time')
+            .lean()
         // const classAttendence = await ClassAttendenceModel.find()
 
         return res.status(200).json({ message: "Todays Attendence Summary Fetched Success!!", success: true, result: classAttendence })
