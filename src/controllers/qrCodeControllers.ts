@@ -133,16 +133,35 @@ const classStudentAttendence = async (req: Request, res: Response): Promise<Resp
         //     return res.status(401).json({ message: "Admin Access Only!!", success: false })
         // }
 
-        const isClassClosed = await ClassAttendenceModel.findOne({ classId, date: formatdate, isOpen: false })
+        const todaysAttandence = await ClassAttendenceModel.findOne({ classId, date: formatdate })
 
-        if (isClassClosed) {
+        if (todaysAttandence?.toObject().isOpen === false) {
             return res.status(404).json({ success: false, message: "Class Closed For Today" });
         }
 
-        const allStudents = await StudentClassModel.find({ classId: classId })
+        const allStudents = await StudentClassModel.find({ classId: classId }).select('studentId').lean()
 
         if (allStudents.length === 0) {
             return res.status(404).json({ success: false, message: "No students found for this class" });
+        }
+
+        const studentIds = allStudents.map(student => student.studentId)
+
+        const existingSummaries = await SummaryModel.find({
+            classId,
+            studentId: { $in: studentIds },
+            'summary.date': formatdate
+        }).select('studentId');
+
+        // this is use to get all Students Ids
+        const existingStudents = new Set(existingSummaries.map(summary => summary.studentId.toString()));
+
+        // this is use to prevent duplicate data entry
+        const newStudentIds = studentIds.filter(id => !existingStudents.has(id.toString()))
+
+
+        if (!newStudentIds.length) {
+            return res.json({ message: "Already Updated initial Students Summary", success: false })
         }
 
         const studentSummary = {
@@ -151,41 +170,25 @@ const classStudentAttendence = async (req: Request, res: Response): Promise<Resp
             present: false,
         }
 
-        let isExistingSummary
-        await Promise.all(
-            allStudents.map(async (entity) => {
-
-                isExistingSummary = await SummaryModel.findOne({
-                    classId,
-                    studentId: entity.studentId,
-                    summary: { $elemMatch: { date: formatdate, } }
-                })
-
-                if (!isExistingSummary) {
-                    await SummaryModel.findOneAndUpdate(
-                        { classId, studentId: entity.studentId },
-                        {
-                            $push: { summary: studentSummary }
-                        },
-                        { upsert: true, new: true }
-                    )
-
-
-                    await StudentClassModel.findOneAndUpdate(
-                        { classId, studentId: entity.studentId },
-                        { $inc: { totalClass: 1, absence: 1 } },
-                    )
+        // bulk update
+        await SummaryModel.bulkWrite(
+            newStudentIds.map((studentId) => ({
+                updateOne: {
+                    filter: { classId, studentId },
+                    update: { $push: { summary: studentSummary } },
+                    upsert: true
                 }
-            })
+            }))
+        );
+
+
+        await StudentClassModel.updateMany(
+            { classId, studentId: { $in: newStudentIds } },
+            { $inc: { totalClass: 1, absence: 1 } }
         )
 
-        if (isExistingSummary) {
-            return res.json({ message: "Already Updated initial Students Summary", success: false })
-        }
 
-        const isAttendence = await ClassAttendenceModel.findOne({ date: formatdate, classId })
-
-        if (!isAttendence) {
+        if (!todaysAttandence) {
 
             const attendenceData = new ClassAttendenceModel({
                 classId,
